@@ -172,16 +172,43 @@ def print_step_ran(step):
             <div class="message"><pre>%(message)s</pre></div>
         ''' % {'message': backtrace}
 
-    
+
+    step_hashes_html = ''
+    if step.hashes:
+        hash_output = '<table class="step hashes">'
+        # Setup column headers with self.keys
+        hash_output += '<tr>'
+        for key in step.keys:
+            hash_output += ('<th>%s</th>' % key)
+        hash_output += '</tr>'
+
+        # Setup hash rows
+        for data in step.hashes:
+            hash_output += '<tr>'
+            for key in step.keys:
+                value = data[key].replace('<', '&lt;').replace('>', '&gt;')
+                hash_output += ('<td>%s</td>' % value)
+            hash_output += '</tr>'
+
+        hash_output += '</table>'
+        step_hashes_html = hash_output
+
     step_txt = '''
             <li id='features_test_feature_12' class='%(step_class)s'>
-                <div class="step_name"><span class="step val">%(step_txt)s</span></div>
+                <div class="step_name">
+                    <span class="step val">
+                    %(step_txt)s
+                    <br>
+                    %(step_hashes_html)s
+                    </span>
+                </div>
                 <div class="step_file"><span>%(step_line)s</span></div>
                 %(fail_explanation)s
             </li>
             %(scenario_color)s
     ''' % {'step_class': step_class,
            'step_txt': cgi.escape(step.original_sentence),
+           'step_hashes_html': step_hashes_html,
            'step_line': defined_line,
            'scenario_color': scenario_color,
            'scenario_num': scenario_num,
@@ -270,7 +297,7 @@ def get_css():
         }
         
         .lettuce,td,th {
-            font: normal 11px "Lucida Grande", Helvetica, sans-serif;
+            font: bold 11px "Lucida Grande", Helvetica, sans-serif;
             background: white;
             color: #000000;
         }
@@ -327,9 +354,9 @@ def get_css():
         }
         
         .lettuce .step_name,td .step_name,th .step_name {
-            float: left;
+            # float: left;
         }
-        
+
         .lettuce .step_file,td .step_file,th .step_file {
             text-align: right;
             color: #999999;
@@ -375,6 +402,8 @@ def get_css():
         
         .lettuce table,td table,th table {
             border-collapse: collapse;
+            margin: 5px 0px 0px 10px;
+            width: 75%;
         }
         
         .lettuce table td,td table td,th table td {
@@ -511,7 +540,23 @@ def get_css():
         .lettuce #summary #totals,td #summary #totals,th #summary #totals {
             font-size: 1.2em;
         }
-        
+
+        #-------------- Step hashes table styles ------------#
+        .lettuce .step .hashes {
+            border-style: solid;
+        }
+        .lettuce .step .hashes th, td {
+            border: 1px solid;
+            padding: 3px 7px 2px 7px;
+            margin: 10px;
+            font-weight: normal;
+        }
+        .lettuce .step .hashes th {
+            padding-top:5px;
+            padding-bottom:4px;
+            background-color:#A7C942;
+        }
+
         .python {
             font-size: 12px;
             font-family: monospace;
