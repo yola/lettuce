@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,10 +14,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import sys
 import os
+import re
 import threading
 import traceback
+
+from lettuce.exceptions import StepLoadingError
 
 world = threading.local()
 world._set = False
@@ -38,8 +40,68 @@ class CallbackDict(dict):
             for callback_list in action_dict.values():
                 callback_list[:] = []
 
+class StepDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(StepDict, self).__init__(*args, **kwargs)
+        self._compiled = {}
+        self._compiled_ignore_case = {}
 
-STEP_REGISTRY = {}
+    def get_regex(self, step, ignore_case=False):
+        if ignore_case:
+            regex = self._compiled_ignore_case.get(step, None)
+            if not regex:
+                regex = re.compile(step, re.I)
+                self._compiled_ignore_case[step] = regex
+        else:
+            regex = self._compiled.get(step, None)
+            if not regex:
+                regex = re.compile(step)
+                self._compiled[step] = regex
+        return regex
+
+    def load(self, step, func):
+        self._assert_is_step(step, func)
+        self[step] = func
+        return func
+
+    def load_func(self, func):
+        regex = self._extract_sentence(func)
+        return self.load(regex, func)
+
+    def load_steps(self, obj):
+        exclude = getattr(obj, "exclude", [])
+        for attr in dir(obj):
+            if self._attr_is_step(attr, obj) and attr not in exclude:
+                step_method = getattr(obj, attr)
+                self.load_func(step_method)
+        return obj
+
+    def _extract_sentence(self, func):
+        func = getattr(func, '__func__', func)
+        sentence = getattr(func, '__doc__', None)
+        if sentence is None:
+            sentence = func.func_name.replace('_', ' ')
+            sentence = sentence[0].upper() + sentence[1:]
+        return sentence
+
+    def _assert_is_step(self, step, func):
+        try:
+            re.compile(step)
+        except re.error as e:
+            raise StepLoadingError("Error when trying to compile:\n"
+                                   "  regex: %r\n"
+                                   "  for function: %s\n"
+                                   "  error: %s" % (step, func, e))
+
+    def _attr_is_step(self, attr, obj):
+        return attr[0] != '_' and self._is_func_or_method(getattr(obj, attr))
+
+    def _is_func_or_method(self, func):
+        func_dir = dir(func)
+        return callable(func) and ("func_name" in func_dir or "__func__" in func_dir)
+
+
+STEP_REGISTRY = StepDict()
 CALLBACK_REGISTRY = CallbackDict(
     {
         'all': {
@@ -49,11 +111,21 @@ CALLBACK_REGISTRY = CallbackDict(
         'step': {
             'before_each': [],
             'after_each': [],
+            'before_output': [],
+            'after_output': [],
         },
         'scenario': {
             'before_each': [],
             'after_each': [],
             'outline': [],
+        },
+        'outline': {
+            'before_each': [],
+            'after_each': [],
+        },
+        'background': {
+            'before_each': [],
+            'after_each': [],
         },
         'feature': {
             'before_each': [],
@@ -83,10 +155,11 @@ def call_hook(situation, kind, *args, **kw):
     for callback in CALLBACK_REGISTRY[kind][situation]:
         try:
             callback(*args, **kw)
-        except Exception, e:
+        except Exception as e:
+            print "=" * 1000
             traceback.print_exc(e)
             print
-            sys.exit(2)
+            raise
 
 
 def clear():

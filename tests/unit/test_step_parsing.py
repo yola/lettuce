@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +22,15 @@ I_HAVE_TASTY_BEVERAGES = """I have the following tasty beverages in my freezer:
    | Nestea | Ice-tea  |  2.10 |
 """.strip()
 I_DIE_HAPPY = "I shall die with love in my heart"
+
+BACKGROUND_WITH_TAGGED_SCENARIO = '''
+    Background:
+        background line 1
+        
+    @wip
+    Scenario:
+        Scenario line 1
+'''
 
 MULTI_LINE = '''
 I have a string like so:
@@ -155,6 +164,12 @@ def test_can_parse_two_ordinary_steps():
     assert_equals(steps[0].sentence, I_DIE_HAPPY)
     assert_equals(steps[1].sentence, I_LIKE_VEGETABLES)
 
+def test_can_parse_background_and_ignore_tag():
+    "It should correctly parse and ignore tags between the background and first step."
+    steps = Step.many_from_lines(BACKGROUND_WITH_TAGGED_SCENARIO.splitlines())
+    steps_without_tags = filter(lambda x: not x.sentence == '@wip', steps)
+    assert_equals(len(steps), len(steps_without_tags))
+
 def test_cannot_start_with_multiline():
     "It should raise an error when a step starts with a multiline string"
     lines = strings.get_stripped_lines(INVALID_MULTI_LINE)
@@ -211,7 +226,7 @@ def test_hashes__first_attr_raises_assertion_error_if_empty():
     try:
         step.hashes.first
         failed = False
-    except AssertionError, e:
+    except AssertionError as e:
         failed = True
         assert_equals(
             unicode(e),
@@ -238,7 +253,7 @@ def test_hashes__last_attr_raises_assertion_error_if_empty():
     try:
         step.hashes.last
         failed = False
-    except AssertionError, e:
+    except AssertionError as e:
         failed = True
         assert_equals(
             unicode(e),
@@ -261,7 +276,7 @@ def test_handy_function_for_table_members_fail_giving_assertionerror():
     try:
         step.hashes.values_under('Foobar')
         failed = False
-    except AssertionError, e:
+    except AssertionError as e:
         failed = True
         assert_equals(
             unicode(e),

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,3 +35,13 @@ def test_language_has_first_of():
 
     assert_equals(lang.first_of_examples, 'Examples')
 
+def test_search_language_only_in_comments():
+    assert_equals(Language.guess_from_string('#  language: fr').code, 'fr') 
+    assert_equals(Language.guess_from_string('#language: fr  ').code, 'fr') 
+    assert_equals(Language.guess_from_string('  #language:   fr').code, 'fr') 
+    assert_equals(Language.guess_from_string(' #   language: fr').code, 'fr') 
+    assert_equals(Language.guess_from_string('\t#   language: fr').code, 'fr') 
+    assert_equals(Language.guess_from_string('# language: fr foo').code, 'fr') 
+    
+    assert_equals(Language.guess_from_string('language: fr').code, 'en') 
+    assert_equals(Language.guess_from_string('#And my current language: fr').code, 'en') 

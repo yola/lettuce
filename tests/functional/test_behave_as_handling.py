@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ def path_to_feature(name):
 @with_setup(prepare_stdout)
 def test_simple_behave_as_feature():
     "Basic step.behave_as behaviour is working"
-    Runner(path_to_feature('1st_normal_steps'), verbosity=3).run()
+    Runner(path_to_feature('1st_normal_steps'), verbosity=3, no_color=True).run()
     assert_stdout_lines(
         "\n"
         "Feature: Multiplication                            # tests/functional/behave_as_features/1st_normal_steps/1st_normal_steps.feature:2\n"
@@ -62,7 +62,7 @@ def test_simple_behave_as_feature():
 @with_setup(prepare_stdout)
 def test_simple_tables_behave_as_feature():
     "Basic step.behave_as behaviour is working"
-    Runner(path_to_feature('2nd_table_steps'), verbosity=3).run()
+    Runner(path_to_feature('2nd_table_steps'), verbosity=3, no_color=True).run()
     assert_stdout_lines(
         "\n"
         "Feature: Multiplication                            # tests/functional/behave_as_features/2nd_table_steps/2nd_table_steps.feature:2\n"
@@ -88,7 +88,7 @@ def test_simple_tables_behave_as_feature():
 @with_setup(prepare_stdout)
 def test_failing_tables_behave_as_feature():
     "Basic step.behave_as behaviour is working"
-    Runner(path_to_feature('3rd_failing_steps'), verbosity=3).run()
+    Runner(path_to_feature('3rd_failing_steps'), verbosity=3, no_color=True).run()
     assert_stdout_lines_with_traceback(
     '\n'
     'Feature: Multiplication                            # tests/functional/behave_as_features/3rd_failing_steps/3rd_failing_steps.feature:2\n'
@@ -121,7 +121,12 @@ def test_failing_tables_behave_as_feature():
     '\n'
     '1 feature (0 passed)\n'
     '2 scenarios (0 passed)\n'
-    '6 steps (2 failed, 4 skipped, 0 passed)\n' % {
+    '6 steps (2 failed, 4 skipped, 0 passed)\n'
+    '\n'
+    'List of failed scenarios:\n'
+    '  Scenario: Regular numbers                        # tests/functional/behave_as_features/3rd_failing_steps/3rd_failing_steps.feature:6\n'
+    '  Scenario: Shorter version of the scenario above  # tests/functional/behave_as_features/3rd_failing_steps/3rd_failing_steps.feature:12\n'
+    '\n' % {
             'lettuce_core_file': lettuce_path('core.py'),
             'step_file': abspath(lettuce_path('..', 'tests', 'functional', 'behave_as_features', '3rd_failing_steps', 'failing_step_definitions.py')),
             'call_line':call_line,

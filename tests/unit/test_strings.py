@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -136,6 +136,13 @@ def test_column_width():
         10
     )
 
+def test_column_width_w_number_and_char():
+    "strings.column_width_w_number_and_char"
+    assert_equals(
+        strings.column_width( u"%s%c" % (u"4209", 0x4209)),
+        6
+    )
+    
 def test_rfill_simple():
     "strings.rfill simple case"
     assert_equals(
