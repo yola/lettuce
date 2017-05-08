@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import codecs
 import fnmatch
 import zipfile
 
+from functools import wraps
 from glob import glob
 from os.path import abspath, join, dirname, curdir, exists
 
@@ -29,23 +30,38 @@ from os.path import abspath, join, dirname, curdir, exists
 class FeatureLoader(object):
     """Loader class responsible for findind features and step
     definitions along a given path on filesystem"""
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, root_dir=None):
         self.base_dir = FileSystem.abspath(base_dir)
+        if root_dir is None:
+            root_dir = '/'
+        self.root_dir = FileSystem.abspath(root_dir)
 
     def find_and_load_step_definitions(self):
-        files = FileSystem.locate(self.base_dir, '*.py')
+        # find steps, possibly up several directories
+        base_dir = self.base_dir
+        while base_dir != self.root_dir:
+            files = FileSystem.locate(base_dir, '*.py')
+            if files:
+                break
+            base_dir = FileSystem.join(base_dir, '..')
+        else:
+            # went as far as root_dir, also discover files under root_dir
+            files = FileSystem.locate(base_dir, '*.py')
+
         for filename in files:
             root = FileSystem.dirname(filename)
             sys.path.insert(0, root)
             to_load = FileSystem.filename(filename, with_extension=False)
             try:
                 module = __import__(to_load)
-            except ValueError, e:
+            except ValueError as e:
                 import traceback
                 err_msg = traceback.format_exc(e)
                 if 'empty module name' in err_msg.lower():
                     continue
                 else:
+                    e.args = ('{0} when importing {1}'
+                              .format(e, filename)),
                     raise e
 
             reload(module)  # always take fresh meat :)
@@ -134,7 +150,7 @@ class FileSystem(object):
         """
         try:
             os.makedirs(path)
-        except OSError, e:
+        except OSError as e:
             # ignore if path already exists
             if e.errno not in (17, ):
                 raise e
@@ -232,3 +248,20 @@ class FileSystem(object):
             path = cls.current_dir(name)
 
         return open(path, mode)
+
+    @classmethod
+    def in_directory(cls, *directories):
+        """Decorator to set the working directory around a function"""
+        def decorator(func):
+            @wraps(func)
+            def inner(*args, **kwargs):
+                cls.pushd(*directories)
+
+                try:
+                    return func(*args, **kwargs)
+
+                finally:
+                    cls.popd()
+                
+            return inner
+        return decorator

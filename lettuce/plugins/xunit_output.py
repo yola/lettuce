@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,16 +15,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from lettuce.terrain import after
 from lettuce.terrain import before
 from xml.dom import minidom
+from lettuce.strings import utf8_string
 
 
 def wrt_output(filename, content):
     f = open(filename, "w")
-    f.write(content.encode('utf-8'))
+    if isinstance(content, unicode):
+        content = content.encode('utf-8')
+
+    f.write(content)
     f.close()
+
+
+def write_xml_doc(filename, doc):
+    wrt_output(filename, doc.toxml())
 
 
 def total_seconds(td):
@@ -46,34 +54,41 @@ def enable(filename=None):
 
     @after.each_step
     def create_test_case_step(step):
-        if step.scenario.outlines:
+        parent = step.scenario or step.background
+        if getattr(parent, 'outlines', None):
             return
         
-        classname = "%s : %s" % (step.scenario.feature.name, step.scenario.name)
+        name = getattr(parent, 'name', 'Background')    # Background sections are nameless
+        classname = u"%s : %s" % (parent.feature.name, name)
         tc = doc.createElement("testcase")
         tc.setAttribute("classname", classname)
         tc.setAttribute("name", step.sentence)
-        tc.setAttribute("time", str(total_seconds((datetime.now() - step.started))))
-        
+        try:
+            tc.setAttribute("time", str(total_seconds((datetime.now() - step.started))))
+        except AttributeError:
+            tc.setAttribute("time", str(total_seconds(timedelta(seconds=0))))
+
         if not step.ran:
-            skip=doc.createElement("skipped")
+            skip = doc.createElement("skipped")
+            skip.setAttribute("type", "UndefinedStep(%s)" % step.sentence)
             tc.appendChild(skip)
 
         if step.failed:
             cdata = doc.createCDATASection(step.why.traceback)
             failure = doc.createElement("failure")
-            failure.setAttribute("message", step.why.cause)
+            if hasattr(step.why, 'cause'):
+                failure.setAttribute("message", step.why.cause)
             failure.setAttribute("type", step.why.exception.__class__.__name__)
             failure.appendChild(cdata)
             tc.appendChild(failure)
 
         root.appendChild(tc)
-    
+
     @before.outline
     def time_outline(scenario, order, outline, reasons_to_fail):
         scenario.outline_started = datetime.now()
         pass
-    
+
     @after.outline
     def create_test_case_outline(scenario, order, outline, reasons_to_fail):
         classname = "%s : %s" % (scenario.feature.name, scenario.name)
@@ -85,7 +100,7 @@ def enable(filename=None):
         for reason_to_fail in reasons_to_fail:
             cdata = doc.createCDATASection(reason_to_fail.traceback)
             failure = doc.createElement("failure")
-            failure.setAttribute("message", reason_to_fail.cause)
+            failure.setAttribute("message", reason_to_fail.cause if hasattr(reason_to_fail,"cause") else "")
             failure.appendChild(cdata)
             tc.appendChild(failure)
 
@@ -98,4 +113,4 @@ def enable(filename=None):
         root.setAttribute("errors", '0')
         root.setAttribute("time", '0')
         doc.appendChild(root)
-        wrt_output(output_filename, doc.toxml())
+        write_xml_doc(output_filename, doc)

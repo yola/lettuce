@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import sys
 from mox import Mox
 from nose.tools import assert_equals
 
@@ -23,6 +24,18 @@ from lettuce.terrain import before
 from lettuce.terrain import world
 from lettuce.core import Feature, TotalResult
 from lettuce.registry import CALLBACK_REGISTRY
+
+OUTLINE_FEATURE = '''
+Feature: Outline hooks
+
+  Scenario Outline: Outlines
+    Given step1 of <outline>
+    And step2 of <outline>
+    Examples:
+      | outline        |
+      | first_outline  |
+      | second_outline |
+'''
 
 FEATURE1 = '''
 Feature: Before and After callbacks all along lettuce
@@ -35,6 +48,18 @@ Feature: Before and After callbacks all along lettuce
     Scenario: Before and After scenarios
         Given I append "during" to states
 
+    Scenario: Again
+        Given I append "during" to states
+'''
+
+
+FEATURE3 = '''
+Feature: Before and After callbacks all along lettuce
+    @tag1
+    Scenario: Before and After scenarios
+        Given I append "during" to states
+
+    @tag2
     Scenario: Again
         Given I append "during" to states
 '''
@@ -57,9 +82,86 @@ def test_world():
     set_world()
     test_does_have()
 
+
+def test_outline_hooks_if_test_failed():
+    "before.each_outline and after.each_outline decorators works in correct order even if test fails in fastfail"
+    @step("step1 of first_outline")
+    def step_def(step):
+        raise Exception("Failed")
+
+    world.scenario_names = set()
+    world.hooks_for_failing_test = []
+
+    @before.each_scenario
+    def before_scenario(scenario):
+        world.hooks_for_failing_test.append("before scenario {0}".format(scenario.name))
+
+    @after.each_scenario
+    def after_scenario(scenario):
+        world.hooks_for_failing_test.append("after scenario {0}".format(scenario.name))
+
+    @before.each_outline
+    def before_outline(scenario, outline):
+        world.scenario_names.add(scenario.name)
+        world.hooks_for_failing_test.append("before {0}".format(outline["outline"]))
+
+    @after.each_outline
+    def after_outline(scenario, outline):
+        world.scenario_names.add(scenario.name)
+        world.hooks_for_failing_test.append("after {0}".format(outline["outline"]))
+
+    feature = Feature.from_string(OUTLINE_FEATURE)
+    try:
+        feature.run(failfast=True)
+    except Exception:
+        pass
+
+    assert_equals(world.hooks_for_failing_test,
+                  ['before scenario Outlines',
+                   'before first_outline',
+                   'after first_outline',
+                   'after scenario Outlines'])
+
+
+def test_outline_hooks():
+    "terrain.before.each_outline and terrain.after.each_outline decorators"
+    world.scenario_names = set()
+    world.hooks = []
+
+    @before.each_scenario
+    def before_scenario(scenario):
+        world.hooks.append("before scenario {0}".format(scenario.name))
+
+    @after.each_scenario
+    def after_scenario(scenario):
+        world.hooks.append("after scenario {0}".format(scenario.name))
+
+    @before.each_outline
+    def before_outline(scenario, outline):
+        world.scenario_names.add(scenario.name)
+        world.hooks.append("before {0}".format(outline["outline"]))
+
+    @after.each_outline
+    def after_outline(scenario, outline):
+        world.scenario_names.add(scenario.name)
+        world.hooks.append("after {0}".format(outline["outline"]))
+
+    feature = Feature.from_string(OUTLINE_FEATURE)
+    feature.run()
+
+    assert_equals(world.hooks,
+                  ['before scenario Outlines',
+                   'before first_outline',
+                   'after first_outline',
+                   'before second_outline',
+                   'after second_outline',
+                   'after scenario Outlines'])
+
+
 def test_after_each_step_is_executed_before_each_step():
     "terrain.before.each_step and terrain.after.each_step decorators"
     world.step_states = []
+
     @before.each_step
     def set_state_to_before(step):
         world.step_states.append('before')
@@ -83,6 +185,7 @@ def test_after_each_step_is_executed_before_each_step():
 
     assert_equals(world.step_states, ['before', 'during', 'after'])
 
+
 def test_after_each_scenario_is_executed_before_each_scenario():
     "terrain.before.each_scenario and terrain.after.each_scenario decorators"
     world.scenario_steps = []
@@ -104,8 +207,9 @@ def test_after_each_scenario_is_executed_before_each_scenario():
 
     assert_equals(
         world.scenario_steps,
-        ['before', 'during', 'after', 'before', 'during', 'after']
+        ['before', 'during', 'after', 'before', 'during', 'after'],
     )
+
 
 def test_after_each_feature_is_executed_before_each_feature():
     "terrain.before.each_feature and terrain.after.each_feature decorators"
@@ -128,8 +232,27 @@ def test_after_each_feature_is_executed_before_each_feature():
 
     assert_equals(
         world.feature_steps,
-        ['before', 'during', 'during', 'after']
+        ['before', 'during', 'during', 'after'],
     )
+
+
+def test_feature_hooks_not_invoked_if_no_scenarios_run():
+    feature = Feature.from_string(FEATURE3)
+
+    world.feature_steps = []
+    feature.run(tags=['tag1'])
+    assert_equals(
+        world.feature_steps,
+        ['before', 'during', 'after']
+    )
+
+    world.feature_steps = []
+    feature.run(tags=['tag3'])
+    assert_equals(
+        world.feature_steps,
+        []
+    )
+
 
 def test_after_each_all_is_executed_before_each_all():
     "terrain.before.each_all and terrain.after.each_all decorators"
@@ -145,13 +268,13 @@ def test_after_each_all_is_executed_before_each_all():
     mox.StubOutWithMock(lettuce.fs, 'FileSystem')
     mox.StubOutWithMock(lettuce, 'Feature')
 
-    lettuce.fs.FeatureLoader('some_basepath').AndReturn(loader_mock)
+    lettuce.fs.FeatureLoader('some_basepath', None).AndReturn(loader_mock)
 
     lettuce.sys.path.insert(0, 'some_basepath')
     lettuce.sys.path.remove('some_basepath')
 
-    loader_mock.find_and_load_step_definitions()
     loader_mock.find_feature_files().AndReturn(['some_basepath/foo.feature'])
+    loader_mock.find_and_load_step_definitions()
     lettuce.Feature.from_file('some_basepath/foo.feature'). \
         AndReturn(Feature.from_string(FEATURE2))
 
@@ -159,6 +282,7 @@ def test_after_each_all_is_executed_before_each_all():
 
     runner = lettuce.Runner('some_basepath')
     CALLBACK_REGISTRY.clear()
+
     @before.all
     def set_state_to_before():
         world.all_steps.append('before')
@@ -178,10 +302,11 @@ def test_after_each_all_is_executed_before_each_all():
 
     assert_equals(
         world.all_steps,
-        ['before', 'during', 'during', 'after']
+        ['before', 'during', 'during', 'after'],
     )
 
     mox.UnsetStubs()
+
 
 def test_world_should_be_able_to_absorb_functions():
     u"world should be able to absorb functions"
@@ -200,6 +325,7 @@ def test_world_should_be_able_to_absorb_functions():
 
     assert not hasattr(world, 'function1')
 
+
 def test_world_should_be_able_to_absorb_lambdas():
     u"world should be able to absorb lambdas"
     assert not hasattr(world, 'named_func')
@@ -215,22 +341,27 @@ def test_world_should_be_able_to_absorb_lambdas():
 
     assert not hasattr(world, 'named_func')
 
+
 def test_world_should_be_able_to_absorb_classs():
-   u"world should be able to absorb classs"
-   assert not hasattr(world, 'MyClass')
+    u"world should be able to absorb class"
+    assert not hasattr(world, 'MyClass')
 
-   @world.absorb
-   class MyClass:
-       pass
+    if sys.version_info < (2, 6):
+        return
 
-   assert hasattr(world, 'MyClass')
-   assert_equals(world.MyClass, MyClass)
+    class MyClass:
+        pass
 
-   assert isinstance(world.MyClass(), MyClass)
+    world.absorb(MyClass)
 
-   world.spew('MyClass')
+    assert hasattr(world, 'MyClass')
+    assert_equals(world.MyClass, MyClass)
 
-   assert not hasattr(world, 'MyClass')
+    assert isinstance(world.MyClass(), MyClass)
+
+    world.spew('MyClass')
+
+    assert not hasattr(world, 'MyClass')
 
 
 def test_hooks_should_be_still_manually_callable():

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,6 +21,8 @@ from nose.tools import assert_equals, assert_not_equals
 from lettuce import registry
 from difflib import Differ
 
+
+
 def prepare_stdout():
     registry.clear()
     if isinstance(sys.stdout, StringIO):
@@ -35,15 +37,37 @@ def prepare_stderr():
     std = StringIO()
     sys.stderr = std
 
+
 def assert_lines(original, expected):
     original = original.decode('utf-8') if isinstance(original, basestring) else original
     assert_lines_unicode(original, expected)
 
+
 def assert_lines_unicode(original, expected):
+    if isinstance(expected, unicode):
+        expected = expected.encode('utf-8')
+
+    if isinstance(original, unicode):
+        original = original.encode('utf-8')
+
+    expected_lines = expected.splitlines(1)
+    original_lines = original.splitlines(1)
+
     if original != expected:
-        diff = ''.join(list(Differ().compare(expected.splitlines(1), original.splitlines(1))))
-        raise AssertionError, 'Output differed as follows:\n' + diff + "\nOutput was:\n" + original +"\nExpected was:\n"+expected
-    assert_equals(len(expected), len(original), 'Output appears equal, but of different lengths.')
+        comparison = Differ().compare(expected_lines, original_lines)
+        if isinstance(comparison, unicode):
+            expected = expected.encode('utf-8')
+
+        diff = u''.encode('utf-8').join(comparison)
+        msg = (u'Output differed as follows:\n{0}\n'
+               'Output was:\n{1}\nExpected was:\n{2}'.encode('utf-8'))
+
+        raise AssertionError(repr(msg.format(diff, original, expected)).replace(r'\n', '\n'))
+
+    assert_equals(
+        len(expected), len(original),
+        u'Output appears equal, but of different lengths.')
+
 
 def assert_lines_with_traceback(one, other):
     lines_one = one.splitlines()
@@ -64,10 +88,11 @@ def assert_lines_with_traceback(one, other):
 
     assert_unicode_equals(len(lines_one), len(lines_other))
 
+
 def assert_unicode_equals(original, expected):
     if isinstance(original, basestring):
         original = original.decode('utf-8')
-
+    assert_equals.im_class.maxDiff = None
     assert_equals(original, expected)
 
 def assert_stderr(expected):
@@ -89,4 +114,3 @@ def assert_stdout_lines_with_traceback(other):
 
 def assert_stderr_lines_with_traceback(other):
     assert_lines_with_traceback(sys.stderr.getvalue(), other)
-

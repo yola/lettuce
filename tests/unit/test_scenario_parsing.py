@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from sure import expect
+from lettuce.core import Step
+from lettuce.core import Scenario
+from lettuce.core import Feature
+from lettuce.exceptions import LettuceSyntaxError
+
+from nose.tools import assert_equals
+from nose.tools import assert_raises
+
 
 SCENARIO1 = """
 Scenario: Adding some students to my university database
@@ -54,6 +63,19 @@ Examples:
     | 1 | 2 |
     | 2 | 4 |
 """
+
+OUTLINED_SCENARIO_WITH_SUBSTITUTIONS_IN_MULTILINE = '''
+Scenario Outline: Parsing HTML
+    When I parse the HTML:
+        """
+        <div><v></div>
+        """
+    I should see "outline value"
+
+Examples:
+    | v             |
+    | outline value |
+'''
 
 OUTLINED_FEATURE = """
     Feature: Do many things at once
@@ -175,13 +197,24 @@ Scenario: Adding some students to my university database
 
 """
 
-from lettuce.core import Step
-from lettuce.core import Scenario
-from lettuce.core import Feature
-from lettuce.exceptions import LettuceSyntaxError
+INLINE_COMMENTS = '''
+Scenario: Making a sword
+  Given I am using an anvil
+  And I am using a hammer # informational "comment"
+'''
 
-from nose.tools import assert_equals
-from nose.tools import assert_raises
+INLINE_COMMENTS_IGNORED_WITHIN_DOUBLE_QUOTES = '''
+Scenario: Tweeting
+  Given I am logged in on twitter
+  When I search for the hashtag "#hammer"
+'''
+
+INLINE_COMMENTS_IGNORED_WITHIN_SINGLE_QUOTES = """
+Scenario: Tweeting
+  Given I am logged in on twitter
+  When I search for the hashtag '#hammer'
+"""
+
 
 def test_scenario_has_name():
     "It should extract the name of the scenario"
@@ -300,11 +333,21 @@ def test_scenario_tables_are_solved_against_outlines():
             [],
             []
         ]
-    
+
     scenario = Scenario.from_string(OUTLINED_SCENARIO_WITH_SUBSTITUTIONS_IN_TABLE)
     for step, expected_hashes in zip(scenario.solved_steps, expected_hashes_per_step):
         assert_equals(type(step), Step)
         assert_equals(step.hashes, expected_hashes)
+
+def test_scenario_tables_are_solved_against_outlines():
+    "Outline substitution should apply to multiline strings within a scenario"
+    expected_multiline = '<div>outline value</div>'
+
+    scenario = Scenario.from_string(OUTLINED_SCENARIO_WITH_SUBSTITUTIONS_IN_MULTILINE)
+    step = scenario.solved_steps[0]
+    
+    assert_equals(type(step), Step)
+    assert_equals(step.multiline, expected_multiline)
 
 def test_solved_steps_also_have_scenario_as_attribute():
     "Steps solved in scenario outlines also have scenario as attribute"
@@ -426,8 +469,121 @@ def test_scenario_aggregate_all_examples_blocks():
         ]
     )
 
+
 def test_commented_scenarios():
     "A scenario string that contains lines starting with '#' will be commented"
     scenario = Scenario.from_string(COMMENTED_SCENARIO)
     assert_equals(scenario.name, u'Adding some students to my university database')
     assert_equals(len(scenario.steps), 4)
+
+
+
+def test_scenario_matches_tags():
+    ("A scenario with tags should respond with True when "
+     ".matches_tags() is called with a valid list of tags")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=SCENARIO1.strip(),
+        tags=['onetag', 'another-one'])
+
+    expect(scenario.tags).to.equal(['onetag', 'another-one'])
+    assert scenario.matches_tags(['onetag'])
+    assert scenario.matches_tags(['another-one'])
+
+
+def test_scenario_matches_tags_fuzzywuzzy():
+    ("When Scenario#matches_tags is called with a member starting with ~ "
+     "it will consider a fuzzywuzzy match")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=SCENARIO1.strip(),
+        tags=['anothertag', 'another-tag'])
+
+    assert scenario.matches_tags(['~another'])
+
+
+def test_scenario_matches_tags_excluding():
+    ("When Scenario#matches_tags is called with a member starting with - "
+     "it will exclude that tag from the matching")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=SCENARIO1.strip(),
+        tags=['anothertag', 'another-tag'])
+
+    assert not scenario.matches_tags(['-anothertag'])
+    assert scenario.matches_tags(['-foobar'])
+
+
+def test_scenario_matches_tags_excluding_when_scenario_has_no_tags():
+    ("When Scenario#matches_tags is called for a scenario "
+     "that has no tags and the given match is a exclusionary tag")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=(SCENARIO1.strip()))
+
+    assert scenario.matches_tags(['-nope', '-neither'])
+
+
+def test_scenario_matches_tags_excluding_fuzzywuzzy():
+    ("When Scenario#matches_tags is called with a member starting with -~ "
+     "it will exclude that tag from that fuzzywuzzy match")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=('@anothertag\n@another-tag\n' + SCENARIO1.strip()))
+
+    assert not scenario.matches_tags(['-~anothertag'])
+
+
+def test_scenario_show_tags_in_its_representation():
+    ("Scenario#represented should show its tags")
+
+    scenario = Scenario.from_string(
+        SCENARIO1,
+        original_string=SCENARIO1.strip(),
+        tags=['slow', 'firefox', 'chrome'])
+
+    expect(scenario.represented()).to.equal(
+        u'  @slow @firefox @chrome\n  '
+        'Scenario: Adding some students to my university database')
+
+
+def test_scenario_with_inline_comments():
+    ("Scenarios can have steps with inline comments")
+
+    scenario = Scenario.from_string(INLINE_COMMENTS)
+
+    step1, step2 = scenario.steps
+
+    expect(step1.sentence).to.equal(u'Given I am using an anvil')
+    expect(step2.sentence).to.equal(u'And I am using a hammer')
+
+
+def test_scenario_with_hash_within_double_quotes():
+    ("Scenarios have hashes within double quotes and yet don't "
+     "consider them as comments")
+
+    scenario = Scenario.from_string(
+        INLINE_COMMENTS_IGNORED_WITHIN_DOUBLE_QUOTES)
+
+    step1, step2 = scenario.steps
+
+    expect(step1.sentence).to.equal(u'Given I am logged in on twitter')
+    expect(step2.sentence).to.equal(u'When I search for the hashtag "#hammer"')
+
+
+def test_scenario_with_hash_within_single_quotes():
+    ("Scenarios have hashes within single quotes and yet don't "
+     "consider them as comments")
+
+    scenario = Scenario.from_string(
+        INLINE_COMMENTS_IGNORED_WITHIN_SINGLE_QUOTES)
+
+    step1, step2 = scenario.steps
+
+    expect(step1.sentence).to.equal(u'Given I am logged in on twitter')
+    expect(step2.sentence).to.equal(u"When I search for the hashtag '#hammer'")

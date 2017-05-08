@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,7 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from os.path import join, dirname
-from django.utils.importlib import import_module
+try:
+    from importlib import import_module
+except ImportError:
+    from django.utils.importlib import import_module
 from django.conf import settings
 
 
@@ -29,7 +32,7 @@ def _filter_bultins(module):
 def _filter_configured_apps(module):
     "returns only those apps that are in django.conf.settings.LETTUCE_APPS"
     app_found = True
-    if hasattr(settings, 'LETTUCE_APPS') and isinstance(settings.LETTUCE_APPS, tuple):
+    if hasattr(settings, 'LETTUCE_APPS') and isinstance(settings.LETTUCE_APPS, (list, tuple)):
         app_found = False
         for appname in settings.LETTUCE_APPS:
             if module.__name__.startswith(appname):
@@ -41,7 +44,7 @@ def _filter_configured_apps(module):
 def _filter_configured_avoids(module):
     "returns apps that are not within django.conf.settings.LETTUCE_AVOID_APPS"
     run_app = False
-    if hasattr(settings, 'LETTUCE_AVOID_APPS') and isinstance(settings.LETTUCE_AVOID_APPS, tuple):
+    if hasattr(settings, 'LETTUCE_AVOID_APPS') and isinstance(settings.LETTUCE_AVOID_APPS, (list, tuple)):
         for appname in settings.LETTUCE_AVOID_APPS:
             if module.__name__.startswith(appname):
                 run_app = True
@@ -50,7 +53,17 @@ def _filter_configured_avoids(module):
 
 
 def get_apps():
-    return map(import_module, settings.INSTALLED_APPS)
+    """
+    Import Django apps. It ignores ImportErrors.
+    (Django will take care of it)
+    """
+    apps = []
+    for app in settings.INSTALLED_APPS:
+        try:
+            apps.append(import_module(app))
+        except ImportError:
+            pass
+    return apps
 
 
 def harvest_lettuces(only_the_apps=None, avoid_apps=None, path="features"):
@@ -60,7 +73,7 @@ def harvest_lettuces(only_the_apps=None, avoid_apps=None, path="features"):
 
     apps = get_apps()
 
-    if isinstance(only_the_apps, tuple) and any(only_the_apps):
+    if isinstance(only_the_apps, (list, tuple)) and any(only_the_apps):
 
         def _filter_only_specified(module):
             return module.__name__ in only_the_apps
@@ -70,7 +83,7 @@ def harvest_lettuces(only_the_apps=None, avoid_apps=None, path="features"):
         apps = filter(_filter_configured_apps, apps)
         apps = filter(_filter_configured_avoids, apps)
 
-    if isinstance(avoid_apps, tuple) and any(avoid_apps):
+    if isinstance(avoid_apps, (list, tuple)) and any(avoid_apps):
 
         def _filter_avoid(module):
             return module.__name__ not in avoid_apps

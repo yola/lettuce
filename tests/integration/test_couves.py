@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # <Lettuce - Behaviour Driven Development for python>
-# Copyright (C) <2010-2011>  Gabriel Falcão <gabriel@nacaolivre.org>
+# Copyright (C) <2010-2012>  Gabriel Falcão <gabriel@nacaolivre.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,17 +16,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import commands
 from lettuce.fs import FileSystem
+from sure import expect
+from tests.util import run_scenario
 
 current_directory = FileSystem.dirname(__file__)
 
+
+@FileSystem.in_directory(current_directory, 'django', 'couves')
 def test_django_agains_couves():
     'it always call @after.all hooks, even after exceptions'
 
-    FileSystem.pushd(current_directory, "django", "couves")
+    status, out = run_scenario()
 
-    status, out = commands.getstatusoutput("python manage.py harvest --verbosity=3")
+    expect("Couves before all").to.be.within(out)
+    expect("Couves after all").to.be.within(out)
 
-    assert "Couves before all" in out
-    assert "Couves after all" in out
-    FileSystem.popd()
 
+@FileSystem.in_directory(current_directory, 'django', 'couves')
+def test_django_agains_couves_nohooks():
+    'it only calls @before.all and @after.all hooks if there are features found'
+
+    status, out = run_scenario(**{'--tags': 'nothingwillbefound'})
+
+    expect("Couves before all").to.not_be.within(out)
+    expect("Couves after all").to.not_be.within(out)
